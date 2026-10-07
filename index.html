@@ -3372,8 +3372,7 @@ function setupPWA() {
         "try{const c=res.clone();caches.open(CACHE).then(x=>x.put(r,c)).catch(()=>{})}catch(_){}return res;" +
         "}).catch(()=>caches.match('./',{ignoreSearch:true}))))});";
       try {
-        const blob = new Blob([swCode], { type: 'text/javascript' });
-        navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
       } catch (e) { /* 静默 */ }
     });
   }
