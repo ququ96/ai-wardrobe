@@ -869,15 +869,7 @@ const CATS = [
   { key: 'bag',    name: '包包',   emoji: '👜' },
   { key: 'acc',    name: '配饰',   emoji: '💍' },
 ];
-const catOf = (k) => {
-  const found = CATS.find((c) => c.key === k);
-  if (found) return found;
-  /* 支持自定义分类 */
-  const custom = (S.cfg.customCats || []).find((c) => c.key === k);
-  return custom || CATS[0];
-};
-/* 获取全部分类（预设 + 自定义） */
-function allCats() { return CATS.concat(S.cfg.customCats || []); }
+const catOf = (k) => CATS.find((c) => c.key === k) || CATS[0];
 
 const FABRICS = ['棉质', '针织', '雪纺', '牛仔', '羊毛', '西装料', '亚麻', '真丝', '皮革', '卫衣棉', '灯芯绒', '运动速干', '毛绒', '网纱'];
 const STYLES  = ['简约', '通勤', '休闲', '甜美', '酷感', '复古', '运动', '法式', '街头', '辣妹', '学院', '民族'];
@@ -1285,6 +1277,17 @@ const S = {
     customCats: [],           // 自定义分类 [{key, name, emoji}]
   },
 };
+
+/* ---------------- 分类工具（IIFE内部版本，支持自定义分类） ---------------- */
+/* 覆盖外部的catOf，支持从S.cfg.customCats中查找自定义分类 */
+const catOf = (k) => {
+  const found = CATS.find((c) => c.key === k);
+  if (found) return found;
+  const custom = (S.cfg.customCats || []).find((c) => c.key === k);
+  return custom || CATS[0];
+};
+/* 获取全部分类（预设 + 自定义） */
+function allCats() { return CATS.concat(S.cfg.customCats || []); }
 
 /* ---------------- 模型配置读写（localStorage，独立于业务数据） ---------------- */
 const CFG_KEY = 'wr_model_cfg';
