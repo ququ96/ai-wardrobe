@@ -3363,18 +3363,7 @@ function setupPWA() {
 
   /* Service Worker：单文件模式下用 Blob 注册，缓存当前页面实现离线打开 */
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    window.addEventListener('load', () => {
-      const swCode = "const CACHE='ai-wardrobe-single-v1';" +
-        "self.addEventListener('install',e=>{e.waitUntil(self.skipWaiting())});" +
-        "self.addEventListener('activate',e=>{e.waitUntil(self.clients.claim())});" +
-        "self.addEventListener('fetch',e=>{const r=e.request;if(r.method!=='GET')return;" +
-        "e.respondWith(caches.match(r,{ignoreSearch:true}).then(h=>h||fetch(r).then(res=>{" +
-        "try{const c=res.clone();caches.open(CACHE).then(x=>x.put(r,c)).catch(()=>{})}catch(_){}return res;" +
-        "}).catch(()=>caches.match('./',{ignoreSearch:true}))))});";
-      try {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
-      } catch (e) { /* 静默 */ }
-    });
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
   /* 图标：内联 data URI 注入 favicon 与 apple-touch-icon（不依赖外部文件） */
   try {
