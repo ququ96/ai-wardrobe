@@ -12,6 +12,8 @@
 <meta data-page-node-id="lbtfilamJMNkyEhjKA7eKt" content="default" name="apple-mobile-web-app-status-bar-style">
 <meta data-page-node-id="58IsrjMy6Ubqqt87sdgQuu" content="AI衣橱" name="apple-mobile-web-app-title">
 <link rel="manifest" href="./manifest.json" id="manifest-link">
+<!-- 本地WebGPU抠图库（浏览器本地运行，不消耗token；加载失败自动降级到内置算法） -->
+<script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/imgy.umd.min.js" onerror="window.__webgpuCutoutFailed=true"></script>
 <style data-page-node-id="zAarlSnOL5V3QSYx0XmjcY" data-pnid-children="JSVCBVreqgUd4mncPkifrI">
 /* ============ AI衣橱 · 奶油极简主题 ============ */
 :root {
@@ -596,6 +598,55 @@ select.input { appearance: none; -webkit-appearance: none; background-image: lin
 .bold { font-weight: 700; }
 .center { text-align: center; }
 
+/* ===== 增量升级新增样式 ===== */
+/* 日历：空白日期可点击 */
+.cal-cell.clickable { cursor: pointer; position: relative; }
+.cal-cell.clickable:hover { background: var(--cream); }
+.cal-add-hint { position: absolute; bottom: 4px; right: 6px; font-size: 16px; color: var(--text-3); opacity: 0.5; }
+.cal-cell.clickable:hover .cal-add-hint { opacity: 1; color: var(--primary-deep); }
+
+/* 穿搭选择器：可勾选卡片 */
+.item-card.pickable { cursor: pointer; position: relative; border: 2px solid transparent; transition: all 0.15s; }
+.item-card.pickable .pick-check { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,0.9); color: var(--text-3); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; opacity: 0; transition: all 0.15s; }
+.item-card.pickable:hover { border-color: var(--primary-light); }
+.item-card.pickable.selected { border-color: var(--primary-deep); box-shadow: 0 2px 12px rgba(210,160,120,0.3); }
+.item-card.pickable.selected .pick-check { opacity: 1; background: var(--primary-deep); color: #fff; }
+
+/* 分类管理：删除按钮 */
+.chip-del { font-size: 14px; color: var(--danger); background: none; border: none; cursor: pointer; padding: 0 2px; line-height: 1; }
+.chip-del:hover { color: #c0392b; }
+
+/* 上传进度条 */
+.upload-progress-box { background: var(--cream); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+.upload-progress-label { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; justify-content: space-between; }
+.upload-progress-bar { height: 8px; background: #e8ddd0; border-radius: 4px; overflow: hidden; }
+.upload-progress-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--primary-light), var(--primary-deep)); border-radius: 4px; transition: width 0.3s; width: 0%; }
+.upload-progress-tip { font-size: 11.5px; color: var(--text-3); margin-top: 6px; }
+
+/* 移动端：上传区域放大，触控≥48px */
+@media (max-width: 600px) {
+  .upload-hero { padding: 28px 16px; }
+  .upload-hero .u-emoji { font-size: 40px; }
+  .upload-hero .u-t1 { font-size: 16px; }
+  .upload-hero .btn { min-height: 52px; font-size: 15px; }
+  #quick-upload { min-height: 50px; font-size: 14.5px; }
+  .btn { min-height: 44px; }
+  .chip { min-height: 36px; padding: 0 14px; font-size: 13px; }
+  .cal-cell { min-height: 52px; }
+}
+
+/* 导入结果清单 */
+.import-result-box { background: var(--cream); border-radius: 12px; padding: 12px; margin-top: 10px; max-height: 200px; overflow-y: auto; }
+.import-result-item { font-size: 12px; padding: 4px 0; border-bottom: 1px solid rgba(0,0,0,0.05); }
+.import-result-item:last-child { border-bottom: none; }
+.import-result-item.ok { color: #27ae60; }
+.import-result-item.fail { color: var(--danger); }
+
+/* 统计面板增强 */
+.cal-stat { text-align: center; padding: 8px 4px; }
+.cal-stat .n { font-size: 22px; font-weight: 700; color: var(--primary-deep); }
+.cal-stat .l { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+
 </style>
 </head>
 <body data-page-node-id="ErGg7uttQJV76d26T9gxkV">
@@ -818,7 +869,15 @@ const CATS = [
   { key: 'bag',    name: '包包',   emoji: '👜' },
   { key: 'acc',    name: '配饰',   emoji: '💍' },
 ];
-const catOf = (k) => CATS.find((c) => c.key === k) || CATS[0];
+const catOf = (k) => {
+  const found = CATS.find((c) => c.key === k);
+  if (found) return found;
+  /* 支持自定义分类 */
+  const custom = (S.cfg.customCats || []).find((c) => c.key === k);
+  return custom || CATS[0];
+};
+/* 获取全部分类（预设 + 自定义） */
+function allCats() { return CATS.concat(S.cfg.customCats || []); }
 
 const FABRICS = ['棉质', '针织', '雪纺', '牛仔', '羊毛', '西装料', '亚麻', '真丝', '皮革', '卫衣棉', '灯芯绒', '运动速干', '毛绒', '网纱'];
 const STYLES  = ['简约', '通勤', '休闲', '甜美', '酷感', '复古', '运动', '法式', '街头', '辣妹', '学院', '民族'];
@@ -1207,7 +1266,7 @@ const S = {
   isUploading: false,        // 上传锁：处理中/失败均正确复位，避免入口永久卡死
   preview: null,             // 上传前图片预览
   /* v1.3 新增：高级多条件筛选（与原有快捷标签/搜索框叠加生效） */
-  advFilters: { season: [], color: [], fabric: [], style: [] },
+  advFilters: { season: [], color: [], fabric: [], style: [], idle: '', priceMin: null, priceMax: null },
   /* v1.3 新增：AI 穿搭 / 旅行打包 是否调用闲置单品（默认关闭） */
   includeIdle: false,
   /* v1.3 新增：穿搭历史月视图当前显示的月份 */
@@ -1218,6 +1277,12 @@ const S = {
     apiKey: '',
     rmbgUrl: '',
     skipCutout: false,
+    cutoutMode: 'webgpu',    // webgpu(本地AI抠图,默认) | rmbg(云端接口) | local(内置简单算法) | skip(跳过)
+    localOnly: false,         // 仅使用本地能力，不调用任何云端API
+    dailyTokenLimit: 0,       // 每日token消耗上限，0=不限制
+    todayTokenUsed: 0,        // 今日已用token（估算）
+    lastResetDate: '',        // 上次重置日期
+    customCats: [],           // 自定义分类 [{key, name, emoji}]
   },
 };
 
@@ -1464,11 +1529,38 @@ function withTaskTimeout(promise, label, ms) {
   });
 }
 
+/* ---------------- 本地WebGPU抠图（浏览器本地运行，不消耗token） ---------------- */
+/* 基于@imgly/background-removal，首次加载需下载模型(~40MB)，后续缓存；加载失败自动降级 */
+let webgpuCutoutReady = null; // null=未检测, true=可用, false=不可用
+async function webgpuCutout(dataUrl) {
+  /* 检测库是否加载成功 */
+  if (webgpuCutoutReady === null) {
+    webgpuCutoutReady = !!(window.imgy && typeof window.imgy.removeBackground === 'function') && !window.__webgpuCutoutFailed;
+  }
+  if (!webgpuCutoutReady) throw new Error('WebGPU抠图库未加载');
+  try {
+    const blob = await window.imgy.removeBackground(dataUrl, {
+      output: { format: 'image/png' },
+      progress: () => {},
+    });
+    /* Blob转dataURL */
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('抠图结果读取失败'));
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    webgpuCutoutReady = false; /* 标记不可用，后续自动降级 */
+    throw new Error('WebGPU抠图失败: ' + (e && e.message ? e.message : '未知错误'));
+  }
+}
+
 /* ---------------- 批量上传流程 ---------------- */
 /* 处理单张图片：压缩 → (RMBG抠图 | 跳过) → (GLM识别 | 本地识字) → 白底卡片 */
 async function processOneImage(file) {
-  /* 1. 前端压缩，控制分辨率与体积 */
-  const comp = await compressImageFile(file, { maxSide: 1024, quality: 0.82, maxBytes: 1.5 * 1024 * 1024 });
+  /* 1. 前端压缩，控制分辨率与体积（手机大图压缩至长边1920px，兼顾画质与流量） */
+  const comp = await compressImageFile(file, { maxSide: 1920, quality: 0.85, maxBytes: 2 * 1024 * 1024 });
   const skip = !!S.cfg.skipCutout;
   let full = comp.dataUrl;          // 最终入库图
   let fgDataUrl = comp.dataUrl;     // 用于喂给识别接口的图
@@ -1480,28 +1572,54 @@ async function processOneImage(file) {
     full = comp.dataUrl;
     colors = await colorsFromImage(full);
     simple = true; fgRatio = 1;
-  } else if ((S.cfg.rmbgUrl || '').trim()) {
-    /* 模式B：走 RMBG-1.4 服装分割接口 */
-    const cut = await rmbgCutout(comp.dataUrl);
-    const white = await flattenToWhite(cut);
-    full = white.dataUrl;
-    colors = white.colors;
-    fgDataUrl = cut;
-    simple = true; fgRatio = 1;
   } else {
-    /* 模式A：内置本地抠图引擎（原逻辑保留） */
-    const im = await loadImageFromAny(comp.dataUrl);
-    const { canvas, w, h } = drawScaled(im, 1100);
-    const ctx = canvas.getContext('2d');
-    const imageData = ctx.getImageData(0, 0, w, h);
-    const r = cutout(imageData);
-    const white = composeWhite(imageData, r.alpha);
-    const outCv = document.createElement('canvas');
-    outCv.width = w; outCv.height = h;
-    outCv.getContext('2d').putImageData(new ImageData(white.data, w, h), 0, 0);
-    full = outCv.toDataURL('image/jpeg', 0.86);
-    colors = extractColors(white, r.alpha);
-    simple = r.simple; fgRatio = r.fgRatio;
+    /* 根据cutoutMode选择抠图方式：webgpu(默认) → rmbg(云端) → local(内置) */
+    const mode = S.cfg.cutoutMode || 'webgpu';
+    let cutoutOk = false;
+    if (mode === 'webgpu') {
+      /* 模式A（默认）：本地WebGPU AI抠图，边缘平滑，识别衣物，减少背景残留 */
+      try {
+        const cut = await webgpuCutout(comp.dataUrl);
+        const white = await flattenToWhite(cut);
+        full = white.dataUrl;
+        colors = white.colors;
+        fgDataUrl = cut;
+        simple = true; fgRatio = 1;
+        cutoutOk = true;
+      } catch (e) {
+        /* WebGPU失败自动降级到内置简单算法，不阻断入库 */
+        console.warn('WebGPU抠图降级:', e.message);
+      }
+    }
+    if (!cutoutOk && (mode === 'rmbg' || (mode === 'webgpu' && (S.cfg.rmbgUrl || '').trim()))) {
+      /* 模式B：走 RMBG-1.4 云端服装分割接口（需配置rmbgUrl） */
+      if ((S.cfg.rmbgUrl || '').trim()) {
+        try {
+          const cut = await rmbgCutout(comp.dataUrl);
+          const white = await flattenToWhite(cut);
+          full = white.dataUrl;
+          colors = white.colors;
+          fgDataUrl = cut;
+          simple = true; fgRatio = 1;
+          cutoutOk = true;
+        } catch (e) { console.warn('RMBG抠图降级:', e.message); }
+      }
+    }
+    if (!cutoutOk) {
+      /* 模式C（兜底）：内置本地简单抠图算法，纯前端无依赖 */
+      const im = await loadImageFromAny(comp.dataUrl);
+      const { canvas, w, h } = drawScaled(im, 1100);
+      const ctx = canvas.getContext('2d');
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const r = cutout(imageData);
+      const white = composeWhite(imageData, r.alpha);
+      const outCv = document.createElement('canvas');
+      outCv.width = w; outCv.height = h;
+      outCv.getContext('2d').putImageData(new ImageData(white.data, w, h), 0, 0);
+      full = outCv.toDataURL('image/jpeg', 0.86);
+      colors = extractColors(white, r.alpha);
+      simple = r.simple; fgRatio = r.fgRatio;
+    }
   }
 
   /* 2. 缩略图 */
@@ -1509,14 +1627,23 @@ async function processOneImage(file) {
 
   /* 3. 属性识别：智谱 GLM-4V（可选，失败自动回退本地识字，不阻断入库） */
   let meta = null, aiNote = '';
-  if (S.cfg.provider === 'zhipu' && (S.cfg.apiKey || '').trim()) {
+  /* 费用控制：本地模式或token超限则跳过云端AI识别 */
+  const cloudBlocked = S.cfg.localOnly || (S.cfg.dailyTokenLimit > 0 && S.cfg.todayTokenUsed >= S.cfg.dailyTokenLimit);
+  if (S.cfg.provider === 'zhipu' && (S.cfg.apiKey || '').trim() && !cloudBlocked) {
     try {
       const rec = await glmRecognize(fgDataUrl);
       meta = normalizeRecognition(rec, colors[0]);
       aiNote = '🤖 GLM-4V 已识别，可编辑修正';
+      /* 估算token消耗（图片+文字，粗略估算） */
+      S.cfg.todayTokenUsed += 1500;
+      if (S.cfg.dailyTokenLimit > 0 && S.cfg.todayTokenUsed >= S.cfg.dailyTokenLimit) {
+        toast('⚠️ 今日token已达上限，后续将仅使用本地功能', 'warn', 4000);
+      }
     } catch (e) {
       aiNote = '⚠️ AI 识别未成功：' + e.message;
     }
+  } else if (cloudBlocked && S.cfg.provider === 'zhipu' && (S.cfg.apiKey || '').trim()) {
+    aiNote = '🔒 已开启本地模式/达到token上限，跳过云端AI识别';
   }
 
   const mainColor = (meta && meta.mainColor) || colors[0].name;
@@ -1606,25 +1733,55 @@ function normalizeRecognition(rec, colorFallback) {
 
 async function handleFiles(files) {
   const imgs = Array.from(files).filter((f) => f.type.startsWith('image/'));
-  if (!imgs.length) { toast('⚠️ 未选择有效图片', 'warn'); return; }
+  if (!imgs.length) { toast('⚠️ 未选择有效图片，请选择 JPG/PNG 格式的图片', 'warn'); return; }
   if (S.isUploading) { toast('⏳ 正在处理上一批图片，请稍候…', 'warn'); return; }
+  /* 检查图片大小，给出友好提示 */
+  const tooBig = imgs.filter((f) => f.size > 20 * 1024 * 1024);
+  if (tooBig.length) {
+    if (!confirm('有 ' + tooBig.length + ' 张图片超过 20MB，处理可能较慢。是否继续？（建议先压缩图片）')) return;
+  }
 
   /* 上传前图片预览 */
   await showPreview(imgs);
 
   S.isUploading = true;
   updateUploadButton();
-  toast('📥 收到 ' + imgs.length + ' 张图片，开始处理…', '', 2200);
+
+  /* 显示上传进度条 */
+  openModal(
+    modalHead('📥 正在处理图片') +
+    '<div class="m-body">' +
+      '<div class="upload-progress-box">' +
+        '<div class="upload-progress-label"><span id="up-stage">准备中…</span><span id="up-count">0 / ' + imgs.length + '</span></div>' +
+        '<div class="upload-progress-bar"><i id="up-bar"></i></div>' +
+        '<div class="upload-progress-tip" id="up-tip">图片将自动压缩至长边1920px，然后执行抠图和识别</div>' +
+      '</div>' +
+    '</div>',
+    () => {}
+  );
+
   const failed = [];
   try {
     for (let i = 0; i < imgs.length; i++) {
+      const stageEl = $('#up-stage'), barEl = $('#up-bar'), cntEl = $('#up-count'), tipEl = $('#up-tip');
       try {
+        if (stageEl) stageEl.textContent = '第 ' + (i + 1) + ' 张：压缩中…';
+        if (tipEl) tipEl.textContent = '正在压缩图片，控制分辨率和体积…';
         const card = await withTaskTimeout(processOneImage(imgs[i]), '第 ' + (i + 1) + ' 张图片处理', TASK_TIMEOUT);
         S.batch.push(card);
+        if (stageEl) stageEl.textContent = '第 ' + (i + 1) + ' 张：✅ 完成';
+        if (tipEl) tipEl.textContent = '抠图完成，已生成白底卡片';
       } catch (e) {
-        failed.push((i + 1) + '. ' + (e && e.message ? e.message : '未知错误'));
+        const msg = e && e.message ? e.message : '未知错误';
+        failed.push((i + 1) + '. ' + msg);
+        if (stageEl) stageEl.textContent = '第 ' + (i + 1) + ' 张：❌ 失败';
+        if (tipEl) tipEl.textContent = '失败原因：' + msg + '（已跳过，继续处理下一张）';
       }
+      if (barEl) barEl.style.width = Math.round((i + 1) / imgs.length * 100) + '%';
+      if (cntEl) cntEl.textContent = (i + 1) + ' / ' + imgs.length;
     }
+    /* 处理完成，关闭进度条 */
+    closeModal();
     if (S.batch.length) openBatchModal();
     if (failed.length) {
       toast('⚠️ ' + failed.length + ' 张处理失败：' + failed.slice(0, 2).join('；') + (failed.length > 2 ? ' 等' : ''), 'warn', 5000);
@@ -1690,7 +1847,7 @@ function openBatchModal() {
     const warn = !b.simple
       ? '<div class="b-warn">⚠️ 该图背景较复杂，已自动保留整图（纯色背景拍摄抠图效果最佳）</div>'
       : (b.fgRatio < 0.015 ? '<div class="b-warn">⚠️ 未检测到明显衣物主体，建议检查图片</div>' : '');
-    const catBtns = CATS.map((c) =>
+    const catBtns = allCats().map((c) =>
       '<button class="b-cat' + (b.cat === c.key ? ' on' : '') + '" data-tmp="' + b.tmpId + '" data-cat="' + c.key + '"><span class="c-e">' + c.emoji + '</span>' + c.name + '</button>'
     ).join('');
     const tagText = S.cfg.skipCutout ? '📥 已按原图入库 · 保留透明背景' : '✂️ 抠图完成 · 纯白底卡片';
@@ -1810,9 +1967,16 @@ function filteredItems() {
       if (colors.length && !colors.some((v) => (it.colors || []).some((c) => c.name === v) || it.mainColor === v)) return false;
       if (fabrics.length && !fabrics.some((v) => (it.fabric || []).includes(v))) return false;
       if (styles.length && !styles.some((v) => (it.style || []).includes(v))) return false;
+      /* 闲置标记筛选 */
+      if (adv.idle === 'idle' && it.status !== 'idle') return false;
+      if (adv.idle === 'active' && it.status === 'idle') return false;
+      /* 价格区间筛选 */
+      const price = typeof it.price === 'number' ? it.price : 0;
+      if (typeof adv.priceMin === 'number' && adv.priceMin > 0 && price < adv.priceMin) return false;
+      if (typeof adv.priceMax === 'number' && adv.priceMax > 0 && price > adv.priceMax) return false;
     }
     if (q) {
-      const hay = (it.name + ' ' + it.mainColor + ' ' + (it.style || []).join(' ') + ' ' + (it.fabric || []).join(' ') + ' ' + (it.scenes || []).join(' ') + ' ' + catOf(it.cat).name).toLowerCase();
+      const hay = (it.name + ' ' + it.mainColor + ' ' + (it.style || []).join(' ') + ' ' + (it.fabric || []).join(' ') + ' ' + (it.scenes || []).join(' ') + ' ' + (it.remark || '') + ' ' + catOf(it.cat).name).toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -1822,12 +1986,16 @@ function filteredItems() {
 /* v1.3：统计当前生效的高级筛选条件数量（用于按钮角标） */
 function countAdvFilters() {
   const a = S.advFilters || {};
-  return ['season', 'color', 'fabric', 'style'].reduce((n, k) => n + ((a[k] || []).length ? 1 : 0), 0);
+  let n = ['season', 'color', 'fabric', 'style'].reduce((c, k) => c + ((a[k] || []).length ? 1 : 0), 0);
+  if (a.idle) n++;
+  if (typeof a.priceMin === 'number' && a.priceMin > 0) n++;
+  if (typeof a.priceMax === 'number' && a.priceMax > 0) n++;
+  return n;
 }
 
 /* v1.3：重置全部筛选（含快捷标签、搜索框、高级筛选） */
 function resetAllFilters() {
-  S.advFilters = { season: [], color: [], fabric: [], style: [] };
+  S.advFilters = { season: [], color: [], fabric: [], style: [], idle: '', priceMin: null, priceMax: null };
   S.colorFilter = S.fitFilter = S.seasonFilter = S.statusFilter = '';
   S.filterCat = 'all';
 }
@@ -1859,11 +2027,11 @@ function renderCloset() {
 
   /* 分类 chips + v1.3 高级筛选入口 */
   const counts = {};
-  CATS.forEach((c) => counts[c.key] = S.items.filter((i) => i.cat === c.key).length);
+  allCats().forEach((c) => counts[c.key] = S.items.filter((i) => i.cat === c.key).length);
   const advN = countAdvFilters();
   $('#closet-cats').innerHTML =
     '<button class="chip' + (S.filterCat === 'all' ? ' on' : '') + '" data-cat="all">全部 ' + total + '</button>' +
-    CATS.map((c) => '<button class="chip' + (S.filterCat === c.key ? ' on' : '') + '" data-cat="' + c.key + '">' + c.emoji + ' ' + c.name + ' ' + counts[c.key] + '</button>').join('') +
+    allCats().map((c) => '<button class="chip' + (S.filterCat === c.key ? ' on' : '') + '" data-cat="' + c.key + '">' + c.emoji + ' ' + c.name + ' ' + (counts[c.key] || 0) + '</button>').join('') +
     '<button class="chip adv-filter-btn' + (advN ? ' on' : '') + '" id="btn-adv-filter">🎚 高级筛选' +
       (advN ? '<span class="adv-count">' + advN + '</span>' : '') + '</button>';
   const advBtn = $('#btn-adv-filter');
@@ -1936,6 +2104,10 @@ function openDetail(id) {
         '<button class="chip mini' + (it.status !== 'idle' ? ' on' : '') + '" id="d-st-active">✅ 在穿</button>' +
         '<button class="chip mini' + (it.status === 'idle' ? ' on' : '') + '" id="d-st-idle">💤 闲置</button>' +
       '</div><div class="text-3" style="margin-top:5px">标记闲置后，AI 穿搭与旅行打包默认不调用</div>'],
+    /* 新增字段：购买价格与购买时间 */
+    ['💰 购买价格', (typeof it.price === 'number' && it.price > 0) ? '¥ ' + it.price.toFixed(2) : '<span class="text-3">未设置</span>'],
+    ['📅 购买时间', it.purchaseDate ? new Date(it.purchaseDate).toLocaleDateString('zh-CN') : '<span class="text-3">未设置</span>'],
+    ['📝 备注', it.remark ? esc(it.remark) : '<span class="text-3">未设置</span>'],
   ];
   openModal(
     modalHead('单品详情') +
@@ -1991,15 +2163,19 @@ function openDetail(id) {
           S.isUploading = false;
           S.batch = S.batch.filter((b) => b.tmpId !== it.id);
           const fi = $('#file-input');
-          if (fi) fi.value = '';
+          if (fi) { fi.value = ''; fi.disabled = false; }
           closeModal();
+          /* 强制恢复所有上传入口：hero按钮 + quick-upload按钮 + file-input */
           updateUploadButton();
           renderCloset();
           renderCalendar();
+          /* 二次保险：延迟一帧再次同步，避免异步渲染时序导致按钮状态滞后 */
+          requestAnimationFrame(() => { updateUploadButton(); });
           toast('🗑 已删除【' + it.name + '】', 'ok');
         } catch (e) {
           /* 异常同样解除锁定，避免永久卡在上传中 */
           S.isUploading = false;
+          const fi2 = $('#file-input'); if (fi2) fi2.value = '';
           updateUploadButton();
           toast('⚠️ 删除失败：' + (e && e.message ? e.message : '未知错误'), 'warn', 4000);
         }
@@ -2024,13 +2200,17 @@ function openTagEditor(it) {
   area.innerHTML =
     '<div class="field"><label>✏️ 名称</label><input class="input" id="te-name" value="' + esc(it.name) + '"></div>' +
     '<div class="tag-edit-block"><div class="tb-title">类目</div><div class="cat-pick">' +
-      CATS.map((c) => '<button class="cp' + (it.cat === c.key ? ' on' : '') + '" data-cat="' + c.key + '"><span class="c-e">' + c.emoji + '</span>' + c.name + '</button>').join('') +
+      allCats().map((c) => '<button class="cp' + (it.cat === c.key ? ' on' : '') + '" data-cat="' + c.key + '"><span class="c-e">' + c.emoji + '</span>' + c.name + '</button>').join('') +
     '</div></div>' +
     mk('面料', 'fabric', FABRICS, 1) + mk('风格', 'style', STYLES, 1) +
     mk('季节', 'season', SEASONS, 1) + mk('场景', 'scenes', SCENES, 1) +
     '<div class="tag-edit-block"><div class="tb-title">版型</div><div class="chips">' +
       FITS.map((v) => '<button class="chip mini' + (it.fit === v ? ' on' : '') + '" data-k="fit" data-v="' + v + '" data-multi="0">' + v + '</button>').join('') +
     '</div></div>' +
+    /* 新增字段：购买价格、购买时间、备注 */
+    '<div class="field"><label>💰 购买价格（元）</label><input class="input" id="te-price" type="number" min="0" step="0.01" placeholder="如：199.00" value="' + (typeof it.price === 'number' ? it.price : '') + '"></div>' +
+    '<div class="field"><label>📅 购买时间</label><input class="input" id="te-purchase-date" type="date" value="' + (it.purchaseDate ? new Date(it.purchaseDate).toISOString().slice(0, 10) : '') + '"></div>' +
+    '<div class="field"><label>📝 备注</label><textarea class="input" id="te-remark" rows="2" placeholder="购买渠道、穿着感受等">' + esc(it.remark || '') + '</textarea></div>' +
     '<button class="btn primary full mt12" id="te-save">💾 保存</button>';
   area.classList.remove('hidden');
   let newCat = it.cat;
@@ -2054,12 +2234,83 @@ function openTagEditor(it) {
   $('#te-save').addEventListener('click', async () => {
     it.name = $('#te-name').value.trim() || it.name;
     it.cat = newCat;
+    /* 保存新增字段：价格、购买时间、备注 */
+    const pVal = parseFloat($('#te-price').value);
+    it.price = (!isNaN(pVal) && pVal >= 0) ? pVal : null;
+    const pdVal = $('#te-purchase-date').value;
+    it.purchaseDate = pdVal ? new Date(pdVal).getTime() : null;
+    it.remark = $('#te-remark').value.trim();
     it.updatedAt = Date.now();
     await dbPut('items', it);
     closeModal(); renderCloset();
     toast('✅【' + it.name + '】标签已更新', 'ok');
   });
   area.scrollIntoView({ behavior: 'smooth' });
+}
+
+/* ---------------- 分类管理（预设 + 自定义） ---------------- */
+function openCatManager() {
+  const custom = S.cfg.customCats || [];
+  const emojiOptions = ['👕', '🧥', '👖', '👗', '👟', '👜', '💍', '🧢', '🧣', '👙', '🩱', '🥾', '👠', '🧦', '🎒', '⌚'];
+  openModal(
+    modalHead('🏷️ 分类管理') +
+    '<div class="m-body">' +
+      '<div class="card-title" style="margin-bottom:8px">📌 预设分类（不可删除）</div>' +
+      '<div class="chips" style="margin-bottom:14px">' +
+        CATS.map((c) => '<span class="chip mini on">' + c.emoji + ' ' + c.name + '</span>').join('') +
+      '</div>' +
+      '<div class="card-title" style="margin-bottom:8px">✨ 自定义分类</div>' +
+      (custom.length ?
+        '<div class="chips" style="margin-bottom:14px">' +
+          custom.map((c, i) => '<span class="chip mini on" style="padding-right:4px">' + c.emoji + ' ' + c.name +
+            '<button class="chip-del" data-del-cat="' + i + '" style="margin-left:4px;color:var(--danger);background:none;border:none;cursor:pointer;font-size:14px">✕</button></span>').join('') +
+        '</div>' :
+        '<div class="text-3" style="margin-bottom:14px">暂无自定义分类</div>') +
+      '<div class="divider"></div>' +
+      '<div class="card-title" style="margin-bottom:8px">➕ 新增自定义分类</div>' +
+      '<div class="field"><label>分类名称</label><input class="input" id="cm-name" placeholder="如：内衣、家居服"></div>' +
+      '<div class="field"><label>选择图标</label>' +
+        '<div class="chips" id="cm-emoji-pick">' +
+          emojiOptions.map((e, i) => '<button class="chip mini' + (i === 0 ? ' on' : '') + '" data-emoji="' + e + '">' + e + '</button>').join('') +
+        '</div></div>' +
+      '<button class="btn primary full mt12" id="cm-add">➕ 添加分类</button>' +
+    '</div>',
+    () => {
+      let selectedEmoji = emojiOptions[0];
+      $$('#cm-emoji-pick [data-emoji]').forEach((b) => b.addEventListener('click', () => {
+        selectedEmoji = b.dataset.emoji;
+        $$('#cm-emoji-pick [data-emoji]').forEach((x) => x.classList.toggle('on', x === b));
+      }));
+      /* 删除自定义分类 */
+      $$('[data-del-cat]').forEach((b) => b.addEventListener('click', () => {
+        const idx = parseInt(b.dataset.delCat);
+        const cat = custom[idx];
+        if (!cat) return;
+        const used = S.items.filter((i) => i.cat === cat.key).length;
+        if (used > 0) {
+          if (!confirm('分类【' + cat.name + '】下有 ' + used + ' 件单品，删除后这些单品将归为「上衣」类，确定删除？')) return;
+          S.items.forEach((i) => { if (i.cat === cat.key) { i.cat = 'top'; dbPut('items', i); } });
+        }
+        custom.splice(idx, 1);
+        S.cfg.customCats = custom;
+        saveCfg();
+        closeModal(); renderCloset();
+        toast('🗑 已删除分类【' + cat.name + '】', 'ok');
+      }));
+      /* 新增自定义分类 */
+      $('#cm-add').addEventListener('click', () => {
+        const name = $('#cm-name').value.trim();
+        if (!name) { toast('⚠️ 请输入分类名称', 'warn'); return; }
+        if (allCats().some((c) => c.name === name)) { toast('⚠️ 分类名称已存在', 'warn'); return; }
+        const key = 'custom_' + Date.now();
+        custom.push({ key, name, emoji: selectedEmoji });
+        S.cfg.customCats = custom;
+        saveCfg();
+        closeModal(); renderCloset();
+        toast('✅ 已添加分类【' + name + '】', 'ok');
+      });
+    }
+  );
 }
 
 /* ---------------- 衣橱筛选面板 ---------------- */
@@ -2116,6 +2367,21 @@ function openAdvFilter() {
         '<div class="tag-edit-block"><div class="tb-title">' + label + '</div><div class="chips">' +
         opts.map((v) => '<button class="chip mini' + ((a[key] || []).includes(v) ? ' on' : '') + '" data-af="' + key + '" data-v="' + esc(v) + '">' + esc(v) + '</button>').join('') +
         '</div></div>').join('') +
+      /* 闲置标记筛选 */
+      '<div class="tag-edit-block"><div class="tb-title">💤 闲置标记</div><div class="chips">' +
+        '<button class="chip mini' + (a.idle === '' ? ' on' : '') + '" data-af-idle="">全部</button>' +
+        '<button class="chip mini' + (a.idle === 'active' ? ' on' : '') + '" data-af-idle="active">✅ 在穿</button>' +
+        '<button class="chip mini' + (a.idle === 'idle' ? ' on' : '') + '" data-af-idle="idle">💤 闲置</button>' +
+      '</div></div>' +
+      /* 价格区间筛选 */
+      '<div class="tag-edit-block"><div class="tb-title">💰 购买价格区间（元）</div>' +
+        '<div class="flex" style="gap:8px;align-items:center">' +
+          '<input class="input" type="number" min="0" placeholder="最低" id="af-price-min" value="' + (a.priceMin || '') + '" style="flex:1">' +
+          '<span class="text-3">—</span>' +
+          '<input class="input" type="number" min="0" placeholder="最高" id="af-price-max" value="' + (a.priceMax || '') + '" style="flex:1">' +
+        '</div>' +
+        '<div class="text-3 mt4">留空表示不限制该端</div>' +
+      '</div>' +
       '<div class="flex between mt12" style="gap:9px">' +
         '<button class="btn ghost" id="adv-reset" style="flex:1">↺ 重置筛选</button>' +
         '<button class="btn primary" id="adv-done" style="flex:1">✅ 完成（' + '<span id="adv-hit">' + filteredItems().length + '</span> 件）</button>' +
@@ -2135,9 +2401,34 @@ function openAdvFilter() {
         if (hit) hit.textContent = filteredItems().length;
         if (sum) sum.textContent = countAdvFilters() ? advSummaryText() : '无';
       }));
+      /* 闲置标记筛选 */
+      $$('#adv-body [data-af-idle]').forEach((b) => b.addEventListener('click', () => {
+        a.idle = b.dataset.afIdle;
+        $$('#adv-body [data-af-idle]').forEach((x) => x.classList.toggle('on', x.dataset.afIdle === a.idle));
+        renderCloset();
+        const hit = $('#adv-hit'), sum = $('#adv-summary');
+        if (hit) hit.textContent = filteredItems().length;
+        if (sum) sum.textContent = countAdvFilters() ? advSummaryText() : '无';
+      }));
+      /* 价格区间筛选（输入后实时生效） */
+      const applyPrice = () => {
+        const mn = parseFloat($('#af-price-min').value);
+        const mx = parseFloat($('#af-price-max').value);
+        a.priceMin = (!isNaN(mn) && mn > 0) ? mn : null;
+        a.priceMax = (!isNaN(mx) && mx > 0) ? mx : null;
+        renderCloset();
+        const hit = $('#adv-hit'), sum = $('#adv-summary');
+        if (hit) hit.textContent = filteredItems().length;
+        if (sum) sum.textContent = countAdvFilters() ? advSummaryText() : '无';
+      };
+      $('#af-price-min').addEventListener('change', applyPrice);
+      $('#af-price-max').addEventListener('change', applyPrice);
       $('#adv-reset').addEventListener('click', () => {
-        S.advFilters = { season: [], color: [], fabric: [], style: [] };
+        S.advFilters = { season: [], color: [], fabric: [], style: [], idle: '', priceMin: null, priceMax: null };
         $$('#adv-body [data-af]').forEach((b) => b.classList.remove('on'));
+        $$('#adv-body [data-af-idle]').forEach((b) => b.classList.toggle('on', b.dataset.afIdle === ''));
+        $('#af-price-min').value = '';
+        $('#af-price-max').value = '';
         renderCloset();
         const hit = $('#adv-hit'), sum = $('#adv-summary');
         if (hit) hit.textContent = filteredItems().length;
@@ -2160,6 +2451,9 @@ function advSummaryText() {
   if ((a.color || []).length) parts.push('颜色 ' + a.color.join('/'));
   if ((a.fabric || []).length) parts.push('面料 ' + a.fabric.join('/'));
   if ((a.style || []).length) parts.push('风格 ' + a.style.join('/'));
+  if (a.idle === 'idle') parts.push('仅闲置');
+  if (a.idle === 'active') parts.push('仅在穿');
+  if (a.priceMin || a.priceMax) parts.push('价格 ' + (a.priceMin || '0') + '-' + (a.priceMax || '不限') + '元');
   return parts.join(' ＋ ') || '无';
 }
 
@@ -2714,7 +3008,8 @@ function renderCalendar() {
   $('#cal-stats').innerHTML =
     '<div class="cal-stat"><div class="n">' + wearTotal + '</div><div class="l">本月穿搭总次数</div></div>' +
     '<div class="cal-stat"><div class="n">' + itemTotal + '</div><div class="l">穿过衣物件数</div></div>' +
-    '<div class="cal-stat"><div class="n">' + (top3.length ? top3[0].c : 0) + '</div><div class="l">最高单品次数</div></div>';
+    '<div class="cal-stat"><div class="n">' + (top3.length ? top3[0].c : 0) + '</div><div class="l">最高单品次数</div></div>' +
+    '<div class="cal-stat"><div class="n">' + S.items.filter((i) => i.status === 'idle').length + '</div><div class="l">💤 闲置衣物</div></div>';
 
   /* 月视图网格：首日留白 + 当月天数 */
   const first = new Date(y, m - 1, 1).getDay();
@@ -2726,13 +3021,13 @@ function renderCalendar() {
     const ds = y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
     const evs = map[ds] || [];
     const its = itemsOfDay(evs);
-    const cls = 'cal-cell' + (evs.length ? ' has' : '') + (ds === today ? ' today' : '');
+    const cls = 'cal-cell' + (evs.length ? ' has' : '') + (ds === today ? ' today' : '') + (evs.length ? '' : ' clickable');
     const inner = evs.length
       ? (its[0] ? '<img src="' + its[0].it.thumb + '" loading="lazy">' : '') +
         '<span class="cal-day-num">' + d + '</span>' +
         '<span class="cal-badge">' + (its.length || evs.length) + ' 件</span>'
-      : '<span class="cal-day-num" style="position:static">' + d + '</span>';
-    html += '<div class="' + cls + '"' + (evs.length ? ' data-date="' + ds + '"' : '') + '>' + inner + '</div>';
+      : '<span class="cal-day-num" style="position:static">' + d + '</span><span class="cal-add-hint">+</span>';
+    html += '<div class="' + cls + '" data-date="' + ds + '">' + inner + '</div>';
   }
   grid.innerHTML = html;
 
@@ -2751,8 +3046,13 @@ function renderCalendar() {
       : '<div class="text-3">本月还没有穿搭记录，把生成的穿搭「保存到日程」后就会出现在这里 ✨</div>';
   }
 
-  /* 点击日期格子查看当天的整套穿搭详情 */
-  grid.querySelectorAll('[data-date]').forEach((cell) => cell.addEventListener('click', () => openDayDetail(cell.dataset.date)));
+  /* 点击日期格子：有穿搭→查看详情，空白→添加当日穿搭 */
+  grid.querySelectorAll('[data-date]').forEach((cell) => cell.addEventListener('click', () => {
+    const ds = cell.dataset.date;
+    const evs = S.schedule.filter((ev) => ev.date === ds);
+    if (evs.length) openDayDetail(ds);
+    else openDayOutfitPicker(ds);
+  }));
 }
 
 /* 某一天的穿搭详情弹窗 */
@@ -2781,9 +3081,90 @@ function openDayDetail(ds) {
     modalHead('📖 ' + m + ' 月 ' + d + ' 日 · 周' + wd) +
     '<div class="m-body">' + body +
       '<div class="text-3">共 ' + evs.length + ' 条日程记录</div>' +
-      '<button class="btn full mt12" id="day-close">知道了</button>' +
+      '<div class="flex" style="gap:8px;margin-top:12px">' +
+        '<button class="btn" id="day-add" style="flex:1">➕ 追加穿搭</button>' +
+        '<button class="btn danger" id="day-del-all" style="flex:1">🗑 清空当日</button>' +
+      '</div>' +
+      '<button class="btn full mt8" id="day-close">知道了</button>' +
     '</div>',
-    () => { $('#day-close').addEventListener('click', closeModal); }
+    () => {
+      $('#day-close').addEventListener('click', closeModal);
+      /* 追加穿搭到当日 */
+      $('#day-add').addEventListener('click', () => { closeModal(); openDayOutfitPicker(ds); });
+      /* 清空当日全部穿搭记录 */
+      $('#day-del-all').addEventListener('click', async () => {
+        if (!confirm('确定删除 ' + m + ' 月 ' + d + ' 日的全部 ' + evs.length + ' 条穿搭记录吗？')) return;
+        for (const ev of evs) {
+          await dbDel('schedule', ev.id);
+          S.schedule = S.schedule.filter((x) => x.id !== ev.id);
+        }
+        closeModal(); renderCalendar(); renderCloset();
+        toast('🗑 已清空当日穿搭记录', 'ok');
+      });
+    }
+  );
+}
+
+/* 为指定日期添加穿搭（多选衣物组合） */
+function openDayOutfitPicker(ds) {
+  const { m, d, wd } = fmtDate(ds);
+  const items = S.items.filter((i) => i.status !== 'idle');
+  const selected = new Set();
+  openModal(
+    modalHead('➕ ' + m + ' 月 ' + d + ' 日 · 选择穿搭') +
+    '<div class="m-body">' +
+      '<div class="text-3" style="margin-bottom:10px">勾选当日要穿的衣物组合，保存后计入穿搭统计。</div>' +
+      (items.length ?
+        '<div class="grid2" id="outfit-pick-grid">' +
+          items.map((it) =>
+            '<div class="item-card pickable" data-id="' + it.id + '">' +
+              '<div class="thumb"><img src="' + it.thumb + '" loading="lazy">' +
+                '<span class="pick-check">✓</span></div>' +
+              '<div class="info"><div class="nm">' + esc(it.name) + '</div>' +
+                '<div class="tags">' + catOf(it.cat).emoji + ' ' + catOf(it.cat).name + '</div></div>' +
+            '</div>').join('') +
+        '</div>' :
+        '<div class="empty"><div class="e-emoji">👗</div><div class="e-tips">衣橱还没有可穿的单品<br>先上传衣物图片吧</div></div>') +
+      '<div class="flex" style="gap:8px;margin-top:12px">' +
+        '<button class="btn ghost" id="op-cancel" style="flex:1">取消</button>' +
+        '<button class="btn primary" id="op-save" style="flex:1">💾 保存（<span id="op-cnt">0</span> 件）</button>' +
+      '</div>' +
+    '</div>',
+    () => {
+      /* 点击勾选/取消 */
+      $$('#outfit-pick-grid .pickable').forEach((c) => c.addEventListener('click', () => {
+        const id = c.dataset.id;
+        if (selected.has(id)) { selected.delete(id); c.classList.remove('selected'); }
+        else { selected.add(id); c.classList.add('selected'); }
+        $('#op-cnt').textContent = selected.size;
+      }));
+      $('#op-cancel').addEventListener('click', closeModal);
+      $('#op-save').addEventListener('click', async () => {
+        if (!selected.size) { toast('⚠️ 请至少选择一件衣物', 'warn'); return; }
+        const ids = [...selected];
+        const ev = {
+          id: uid(),
+          date: ds,
+          title: '日常穿搭',
+          itemIds: ids,
+          createdAt: Date.now(),
+        };
+        await dbAdd('schedule', ev);
+        S.schedule.push(ev);
+        /* 更新单品穿着次数 */
+        for (const id of ids) {
+          const it = S.items.find((x) => x.id === id);
+          if (it) {
+            it.wearCount = (it.wearCount || 0) + 1;
+            it.lastWornAt = Date.now();
+            it.updatedAt = Date.now();
+            await dbPut('items', it);
+          }
+        }
+        closeModal(); renderCalendar(); renderCloset();
+        toast('✅ 已保存 ' + ids.length + ' 件穿搭到 ' + m + ' 月 ' + d + ' 日', 'ok', 2600);
+      });
+    }
   );
 }
 
@@ -3112,6 +3493,8 @@ function openSettings() {
       '<div class="text-3 mt8" style="line-height:1.7">导入由多条衣物组成的 JSON 数组，<b style="color:var(--primary-deep)">相同 ID 自动跳过</b>，旧单品不会重复新增。</div>' +
       '<div class="hidden" id="bulk-progress"></div>' +
       '<div class="divider"></div>' +
+      /* 分类管理入口 */
+      '<button class="btn full mt8" id="set-cat-manager">🏷️ 分类管理（预设7类 + 自定义）</button>' +
       '<button class="btn full danger mt8" id="set-clear-closet">🗑 清空衣橱（仅单品）</button>' +
       '<button class="btn full danger mt8" id="set-clear-all">💥 清空全部数据</button>' +
       '<div class="text-3 mt12 center">' + appVersionText() + '</div>' +
@@ -3126,14 +3509,31 @@ function openSettings() {
         '<input class="input" id="cfg-key" type="password" placeholder="智谱 GLM API Key" value="' + esc(S.cfg.apiKey) + '"></div>' +
       '<div class="field"><label>③ RMBG-1.4 抠图接口地址</label>' +
         '<input class="input" id="cfg-rmbg" placeholder="https://…/rmbg  留空则用内置抠图" value="' + esc(S.cfg.rmbgUrl) + '"></div>' +
+      '<div class="field"><label>④ 抠图模式（默认本地WebGPU，不消耗token）</label>' +
+        '<select class="input" id="cfg-cutout-mode">' +
+          '<option value="webgpu"' + (S.cfg.cutoutMode === 'webgpu' ? ' selected' : '') + '>🟢 本地WebGPU AI抠图（推荐，免费）</option>' +
+          '<option value="rmbg"' + (S.cfg.cutoutMode === 'rmbg' ? ' selected' : '') + '>☁️ 云端RMBG接口（需配置③）</option>' +
+          '<option value="local"' + (S.cfg.cutoutMode === 'local' ? ' selected' : '') + '>⚪ 内置简单算法（纯前端兜底）</option>' +
+        '</select></div>' +
       '<div class="set-row" style="border-bottom:none"><div class="s-l">☑️ 跳过自动AI抠图</div>' +
         '<button class="btn small' + (S.cfg.skipCutout ? ' primary' : ' ghost') + '" id="cfg-skip">' + (S.cfg.skipCutout ? '已开启' : '已关闭') + '</button></div>' +
       '<div class="text-3" style="margin-top:-4px">开启后不再调用抠图接口，直接读取上传的透明 PNG 存入衣橱</div>' +
+      /* ---- 费用控制：本地能力开关 + token限额 ---- */
+      '<div class="divider"></div>' +
+      '<div class="card-title">💰 费用与流量控制</div>' +
+      '<div class="set-row" style="border-bottom:none"><div class="s-l">🔒 仅使用本地能力（纯离线）</div>' +
+        '<button class="btn small' + (S.cfg.localOnly ? ' primary' : ' ghost') + '" id="cfg-local-only">' + (S.cfg.localOnly ? '已开启' : '已关闭') + '</button></div>' +
+      '<div class="text-3" style="margin-top:-4px;margin-bottom:10px">开启后关闭所有云端API请求（智谱GLM、RMBG），仅保留本地抠图、衣橱浏览、筛选、穿搭日历，零费用</div>' +
+      '<div class="field"><label>每日token消耗上限（0=不限制）</label>' +
+        '<input class="input" id="cfg-token-limit" type="number" min="0" placeholder="如：100000" value="' + (S.cfg.dailyTokenLimit || 0) + '"></div>' +
+      '<div class="text-3" style="margin-top:-4px">达到上限自动提示并关闭云端AI调用，仅保留本地功能。每日自动重置</div>' +
       '<button class="btn primary full mt12" id="cfg-save">💾 保存模型配置</button>' +
     '</div>',
     () => {
       $('#set-export').addEventListener('click', exportBackup);
       $('#set-import').addEventListener('click', () => $('#restore-input').click());
+      /* 分类管理 */
+      $('#set-cat-manager').addEventListener('click', () => { closeModal(); openCatManager(); });
       /* v1.3 功能4：批量图片上传（追加模式） */
       $('#bulk-pick').addEventListener('click', () => {
         const fi = $('#file-input');
@@ -3153,11 +3553,21 @@ function openSettings() {
         b.textContent = S.cfg.skipCutout ? '已开启' : '已关闭';
         b.className = 'btn small' + (S.cfg.skipCutout ? ' primary' : ' ghost');
       });
+      /* 仅本地能力开关 */
+      $('#cfg-local-only').addEventListener('click', () => {
+        S.cfg.localOnly = !S.cfg.localOnly;
+        const b = $('#cfg-local-only');
+        b.textContent = S.cfg.localOnly ? '已开启' : '已关闭';
+        b.className = 'btn small' + (S.cfg.localOnly ? ' primary' : ' ghost');
+        if (S.cfg.localOnly) toast('🔒 已开启纯本地模式，所有云端API已关闭', 'ok', 3000);
+      });
       /* 保存模型配置 */
       $('#cfg-save').addEventListener('click', () => {
         S.cfg.provider = $('#cfg-provider').value;
         S.cfg.apiKey = $('#cfg-key').value.trim();
         S.cfg.rmbgUrl = $('#cfg-rmbg').value.trim();
+        S.cfg.cutoutMode = $('#cfg-cutout-mode').value;
+        S.cfg.dailyTokenLimit = Math.max(0, parseInt($('#cfg-token-limit').value) || 0);
         saveCfg();
         closeModal();
         toast('💾 模型配置已保存', 'ok', 3000);
@@ -3314,19 +3724,67 @@ async function importBackup(file) {
   try {
     const text = await file.text();
     const data = JSON.parse(text);
-    if (!data || !Array.isArray(data.items)) throw new Error('格式不对');
-    if (!confirm('导入会覆盖当前全部数据，确定继续？')) return;
-    for (const st of ['items', 'outfits', 'schedule', 'inspirations', 'profile', 'kv']) await dbClear(st);
-    for (const it of data.items) await dbPut('items', it);
-    for (const o of data.outfits || []) await dbPut('outfits', o);
-    for (const ev of data.schedule || []) await dbPut('schedule', ev);
-    for (const ins of data.inspirations || []) await dbPut('inspirations', ins);
-    if (data.profile) await dbPut('profile', { k: 'main', v: data.profile });
-    for (const d of data.diags || []) await dbPut('kv', d);
+    if (!data || !Array.isArray(data.items)) throw new Error('备份文件格式不正确，缺少 items 数组');
+    if (!confirm('即将导入 ' + data.items.length + ' 件单品（追加模式，相同ID自动跳过，不会覆盖现有数据），确定继续？')) return;
+
+    const existingIds = new Set(S.items.map((i) => i.id));
+    const success = [], skipped = [], failed = [];
+
+    /* 导入单品：基于ID去重，追加模式 */
+    for (const it of data.items) {
+      try {
+        if (!it || !it.id) { failed.push('无效单品（缺少ID）'); continue; }
+        if (existingIds.has(it.id)) { skipped.push(it.name || it.id + '（ID已存在）'); continue; }
+        /* 确保必要字段存在 */
+        if (!it.thumb && !it.img && !it.full) { failed.push((it.name || it.id) + '（缺少图片数据）'); continue; }
+        it.full = it.full || it.img || it.thumb;
+        it.thumb = it.thumb || it.full;
+        it.createdAt = it.createdAt || Date.now();
+        it.updatedAt = it.updatedAt || Date.now();
+        it.status = it.status || 'active';
+        it.wearCount = typeof it.wearCount === 'number' ? it.wearCount : 0;
+        await dbPut('items', it);
+        S.items.push(it);
+        existingIds.add(it.id);
+        success.push(it.name || it.id);
+      } catch (e) {
+        failed.push((it.name || it.id || '未知') + '（' + (e.message || '导入失败') + '）');
+      }
+    }
+
+    /* 导入穿搭方案（可选） */
+    if (Array.isArray(data.outfits)) {
+      for (const o of data.outfits) {
+        try { if (o && o.id) await dbPut('outfits', o); } catch (e) { /* 静默 */ }
+      }
+    }
+    /* 导入日程（可选） */
+    if (Array.isArray(data.schedule)) {
+      for (const ev of data.schedule) {
+        try { if (ev && ev.id) await dbPut('schedule', ev); } catch (e) { /* 静默 */ }
+      }
+    }
+
     await loadAll();
     closeModal();
     renderCloset(); renderSchedule(); renderInspo(); renderDiagHistory(); renderDiagnose();
-    toast('📥 备份恢复成功！', 'ok', 3200);
+
+    /* 显示导入结果清单 */
+    const resultHtml =
+      '<div class="import-result-box">' +
+        (success.length ? '<div class="import-result-item ok">✅ 成功导入 ' + success.length + ' 件：' + success.slice(0, 5).join('、') + (success.length > 5 ? ' 等' : '') + '</div>' : '') +
+        (skipped.length ? '<div class="import-result-item">⏭️ 跳过 ' + skipped.length + ' 件（ID已存在）：' + skipped.slice(0, 3).join('、') + (skipped.length > 3 ? ' 等' : '') + '</div>' : '') +
+        (failed.length ? '<div class="import-result-item fail">❌ 失败 ' + failed.length + ' 件：' + failed.slice(0, 3).join('；') + (failed.length > 3 ? ' 等' : '') + '</div>' : '') +
+      '</div>';
+    openModal(
+      modalHead('📥 导入完成') +
+      '<div class="m-body">' +
+        '<div class="text-3" style="margin-bottom:10px">共处理 ' + data.items.length + ' 件单品</div>' +
+        resultHtml +
+        '<button class="btn primary full mt12" id="imp-ok">知道了</button>' +
+      '</div>',
+      () => { $('#imp-ok').addEventListener('click', closeModal); }
+    );
   } catch (e) {
     toast('⚠️ 备份文件解析失败：' + e.message, 'warn', 3200);
   }
@@ -3458,6 +3916,13 @@ async function showWelcomeOnce() {
 async function init() {
   await loadAll();
   loadCfg();
+  /* 每日token消耗自动重置（跨天清零） */
+  const today = new Date().toISOString().slice(0, 10);
+  if (S.cfg.lastResetDate !== today) {
+    S.cfg.todayTokenUsed = 0;
+    S.cfg.lastResetDate = today;
+    saveCfg();
+  }
   S.diagRecords = [];
 
   /* 导航 */
